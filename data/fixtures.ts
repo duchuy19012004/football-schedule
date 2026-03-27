@@ -93,7 +93,7 @@ export const UPCOMING_FIXTURES: MatchEvent[] = [
 
     idAwayTeam: "140155",
     strAwayTeam: "Malaysia",
-    strAwayTeamBadge: "https://r2.thesportsdb.com/images/media/team/badge/4l8bw51597941128.png",
+    strAwayTeamBadge: "https://r2.thesportsdb.com/images/media/team/badge/opqzci1597866541.png",
     intAwayScore: null,
 
     dateEvent: "2026-03-31",
@@ -117,8 +117,8 @@ export const UPCOMING_FIXTURES: MatchEvent[] = [
     strSeason: "2026",
 
     idHomeTeam: "140176",
-    strHomeTeam: "Timor Leste",
-    strHomeTeamBadge: null,
+    strHomeTeam: "Timor-Leste",
+    strHomeTeamBadge: "https://r2.thesportsdb.com/images/media/team/badge/t8g4611718412507.png",
     intHomeScore: null,
 
     idAwayTeam: VN_TEAM_ID,
@@ -153,7 +153,7 @@ export const UPCOMING_FIXTURES: MatchEvent[] = [
 
     idAwayTeam: "140172",
     strAwayTeam: "Singapore",
-    strAwayTeamBadge: null,
+    strAwayTeamBadge: "https://r2.thesportsdb.com/images/media/team/badge/cpctsg1597743506.png",
     intAwayScore: null,
 
     dateEvent: "2026-07-31",
@@ -178,7 +178,7 @@ export const UPCOMING_FIXTURES: MatchEvent[] = [
 
     idHomeTeam: "140147",
     strHomeTeam: "Indonesia",
-    strHomeTeamBadge: "https://r2.thesportsdb.com/images/media/team/badge/6m3dpr1597939498.png",
+    strHomeTeamBadge: "https://r2.thesportsdb.com/images/media/team/badge/hkg0st1656933330.png",
     intHomeScore: null,
 
     idAwayTeam: VN_TEAM_ID,
@@ -213,7 +213,7 @@ export const UPCOMING_FIXTURES: MatchEvent[] = [
 
     idAwayTeam: "140158",
     strAwayTeam: "Myanmar",
-    strAwayTeamBadge: null,
+    strAwayTeamBadge: "https://r2.thesportsdb.com/images/media/team/badge/amvyub1742100977.png",
     intAwayScore: null,
 
     dateEvent: "2026-08-10",
