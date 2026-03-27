@@ -32,6 +32,7 @@ import { VN_BADGE } from "@/data/fixtures";
 
 import HeroSection from "@/components/HeroSection";
 import MatchList from "@/components/MatchList";
+import ResultsSection from "@/components/ResultsSection";
 import TabBar from "@/components/TabBar";
 // Import các components từ Phase 3
 
@@ -149,10 +150,9 @@ export default async function Home() {
         */}
         <TabBar
           resultsContent={
-            // Tab "Kết quả" → hiện danh sách trận đã đá
-            <MatchList
+            <ResultsSection
               matches={pastMatches}
-              title="🏆 Kết quả gần đây"
+              title="Kết quả gần đây"
               emptyMessage="Chưa có kết quả trận đấu nào"
             />
           }
