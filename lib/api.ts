@@ -31,6 +31,7 @@
 
 import axios from "axios";
 import { MatchEvent, VIETNAM_TEAM_ID, VIETNAM_TEAM_ID_AF } from "@/types/match";
+import { PAST_RESULTS, UPCOMING_FIXTURES } from "@/data/fixtures";
 
 // ============================================================
 // CẤU HÌNH THESPORTSDB
@@ -214,38 +215,53 @@ function normalizeFromAF(raw: any): MatchEvent {
 /**
  * getPastMatches — Lấy danh sách trận ĐÃ ĐÁ.
  *
- * CHIẾN LƯỢC:
- *   1. TheSportsDB: eventslast (5 trận gần nhất, có thể chưa có tỷ số)
- *   2. API-Football: fixtures?team=1542&season=2024 (data cũ nhưng chính xác)
- *   3. Ghép kết quả, loại trùng theo tên + ngày, sắp xếp mới nhất trước
+ * CHIẾN LƯỢC (3 nguồn, ưu tiên giảm dần):
+ *   1. PAST_RESULTS (data/fixtures.ts) — data thủ công, ĐỘ CHÍNH XÁC CAO NHẤT
+ *   2. TheSportsDB: eventslast (5 trận gần nhất, có thể chưa có tỷ số)
+ *   3. API-Football: fixtures (data cũ 2022-2024)
+ *
+ *   PAST_RESULTS sẽ OVERRIDE data từ API nếu cùng trận (cùng ngày).
+ *   VD: API trả VN vs Bangladesh score=null → PAST_RESULTS override thành 3-0.
  *
  * @returns Promise<MatchEvent[]> — Mảng trận đấu đã qua
  */
 export async function getPastMatches(): Promise<MatchEvent[]> {
-  // Mảng chứa kết quả từ cả 2 API
-  const allMatches: MatchEvent[] = [];
+  // --- NGUỒN 1 (ưu tiên CAO nhất): Data thủ công ---
+  // PAST_RESULTS chứa tỷ số chính xác, scrape từ Google
+  const allMatches: MatchEvent[] = [...PAST_RESULTS];
 
-  // --- NGUỒN 1: TheSportsDB ---
+  // Tạo Set các key từ manual data để loại trùng sau
+  const manualKeys = new Set(
+    PAST_RESULTS.map((m) => `${m.strHomeTeam}-${m.strAwayTeam}-${m.dateEvent}`)
+  );
+
+  // --- NGUỒN 2: TheSportsDB ---
   try {
     const tsdbRes = await axios.get(
       `${TSDB_BASE}/eventslast.php?id=${VIETNAM_TEAM_ID}`
     );
     const tsdbMatches = tsdbRes.data?.results || [];
-    allMatches.push(...tsdbMatches.map(normalizeFromTSDB));
+    // Chỉ thêm trận KHÔNG trùng với manual data
+    for (const raw of tsdbMatches) {
+      const m = normalizeFromTSDB(raw);
+      const key = `${m.strHomeTeam}-${m.strAwayTeam}-${m.dateEvent}`;
+      if (!manualKeys.has(key)) {
+        allMatches.push(m);
+        manualKeys.add(key);
+      }
+    }
   } catch (error) {
     console.error("❌ TheSportsDB (past) lỗi:", error);
   }
 
-  // --- NGUỒN 2: API-Football (nếu có API key) ---
-  const key = process.env.API_FOOTBALL_KEY;
-  if (key) {
+  // --- NGUỒN 3: API-Football (nếu có API key) ---
+  const apiKey = process.env.API_FOOTBALL_KEY;
+  if (apiKey) {
     try {
-      // Gọi nhiều seasons song song
       const promises = AF_SEASONS.map((season) =>
         axios.get(`${AF_BASE}/fixtures`, {
           headers: afHeaders(),
           params: { team: VIETNAM_TEAM_ID_AF, season, status: "FT" },
-          // status: "FT" = chỉ lấy trận đã kết thúc (Finished)
         })
       );
 
@@ -253,7 +269,14 @@ export async function getPastMatches(): Promise<MatchEvent[]> {
       for (const result of results) {
         if (result.status === "fulfilled") {
           const fixtures = result.value.data?.response || [];
-          allMatches.push(...fixtures.map(normalizeFromAF));
+          for (const raw of fixtures) {
+            const m = normalizeFromAF(raw);
+            const key = `${m.strHomeTeam}-${m.strAwayTeam}-${m.dateEvent}`;
+            if (!manualKeys.has(key)) {
+              allMatches.push(m);
+              manualKeys.add(key);
+            }
+          }
         }
       }
     } catch (error) {
@@ -261,21 +284,11 @@ export async function getPastMatches(): Promise<MatchEvent[]> {
     }
   }
 
-  // --- Loại trùng: so sánh theo (đội nhà + đội khách + ngày) ---
-  const seen = new Set<string>();
-  const uniqueMatches = allMatches.filter((match) => {
-    // Tạo "key" duy nhất cho mỗi trận
-    const key = `${match.strHomeTeam}-${match.strAwayTeam}-${match.dateEvent}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
   // --- Sắp xếp: trận mới nhất lên trước ---
-  uniqueMatches.sort((a, b) => b.dateEvent.localeCompare(a.dateEvent));
+  allMatches.sort((a, b) => b.dateEvent.localeCompare(a.dateEvent));
 
   // Giới hạn 15 trận gần nhất
-  return uniqueMatches.slice(0, 15);
+  return allMatches.slice(0, 15);
 }
 
 // ============================================================
@@ -285,46 +298,60 @@ export async function getPastMatches(): Promise<MatchEvent[]> {
 /**
  * getUpcomingMatches — Lấy danh sách trận SẮP DIỄN RA.
  *
- * Chỉ dùng TheSportsDB vì API-Football free tier
- * không có data season 2025-2026.
+ * CHIẾN LƯỢC (2 nguồn):
+ *   1. UPCOMING_FIXTURES (data/fixtures.ts) — data thủ công, CHÍNH XÁC
+ *   2. TheSportsDB eventsnext — bổ sung nếu API có data mới
  *
- * CÁCH HOẠT ĐỘNG:
- *   1. Gọi API "eventsnext.php" cho TỪNG GIẢI ĐẤU VN tham gia
- *   2. Lọc trận có ĐT Việt Nam (check team ID)
- *   3. Sắp xếp theo ngày gần nhất
+ *   Ưu tiên data thủ công vì TheSportsDB eventsnext
+ *   bị bug trả sai data cho team VN.
  */
 export async function getUpcomingMatches(): Promise<MatchEvent[]> {
+  // --- NGUỒN 1 (chính): Data thủ công ---
+  // Lọc chỉ lấy trận CHƯA diễn ra (dateEvent > today)
+  const today = new Date().toISOString().substring(0, 10);
+  const allMatches: MatchEvent[] = UPCOMING_FIXTURES.filter(
+    (m) => m.dateEvent >= today
+  );
+
+  const manualKeys = new Set(
+    allMatches.map((m) => `${m.strHomeTeam}-${m.strAwayTeam}-${m.dateEvent}`)
+  );
+
+  // --- NGUỒN 2 (bổ sung): TheSportsDB ---
   try {
-    // Gọi API cho từng giải đấu song song
     const promises = VIETNAM_LEAGUE_IDS.map((leagueId) =>
       axios.get(`${TSDB_BASE}/eventsnext.php?id=${leagueId}`)
     );
 
     const results = await Promise.allSettled(promises);
-    const allMatches: MatchEvent[] = [];
 
     for (const result of results) {
       if (result.status === "fulfilled") {
         const events = result.value.data?.events || [];
-        // Lọc: chỉ lấy trận nào có ĐT Việt Nam
         const vietnamMatches = events.filter(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (event: any) =>
             event.idHomeTeam === VIETNAM_TEAM_ID ||
             event.idAwayTeam === VIETNAM_TEAM_ID
         );
-        allMatches.push(...vietnamMatches.map(normalizeFromTSDB));
+        for (const raw of vietnamMatches) {
+          const m = normalizeFromTSDB(raw);
+          const key = `${m.strHomeTeam}-${m.strAwayTeam}-${m.dateEvent}`;
+          if (!manualKeys.has(key)) {
+            allMatches.push(m);
+            manualKeys.add(key);
+          }
+        }
       }
     }
-
-    // Sắp xếp: trận gần nhất lên trước
-    allMatches.sort((a, b) => a.dateEvent.localeCompare(b.dateEvent));
-
-    return allMatches;
   } catch (error) {
-    console.error("❌ Lỗi khi lấy trận sắp tới:", error);
-    return [];
+    console.error("❌ TheSportsDB (upcoming) lỗi:", error);
   }
+
+  // Sắp xếp: trận gần nhất lên trước
+  allMatches.sort((a, b) => a.dateEvent.localeCompare(b.dateEvent));
+
+  return allMatches;
 }
 
 // ============================================================
