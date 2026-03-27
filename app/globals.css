@@ -1,26 +1,97 @@
+/* ============================================================
+   FILE: app/globals.css
+   MỤC ĐÍCH: CSS toàn cục (global styles) cho toàn bộ website.
+
+   KIẾN TRÚC NEXT.JS:
+     - File này được import trong layout.tsx
+     - Áp dụng cho MỌI trang trong ứng dụng
+     - "@import 'tailwindcss'" = kích hoạt Tailwind CSS framework
+     - @theme inline = khai báo biến CSS cho Tailwind dùng
+
+   MÀU SẮC:
+     - Nền tối (dark theme) để website trông hiện đại và premium
+     - Đỏ (#DC2626) = màu chính ĐT Việt Nam
+     - Vàng (#FBBF24) = màu phụ (ngôi sao trên cờ)
+   ============================================================ */
+
+/* Bước 1: Kích hoạt Tailwind CSS */
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ============================================================
+   @theme inline — Khai báo biến màu/font cho Tailwind CSS.
 
+   Tailwind CSS dùng "design tokens" (biến) để quản lý styles.
+   Thay vì viết "color: #DC2626" ở mỗi nơi, ta khai báo 1 lần
+   ở đây rồi dùng class như "text-primary" hay "bg-background".
+
+   CÁCH HOẠT ĐỘNG:
+     --color-primary: #DC2626;
+     → Tailwind tạo ra class: text-primary, bg-primary, border-primary
+     → Dùng trong HTML: <div className="text-primary">Chữ đỏ</div>
+   ============================================================ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* --- Màu nền --- */
+  --color-background: #0a0a0f;          /* Nền chính: đen xanh rất tối */
+  --color-foreground: #ededed;          /* Chữ mặc định: trắng xám */
+  --color-surface: #13131a;             /* Nền card/surface: tối hơn 1 chút */
+
+  /* --- Màu ĐT Việt Nam --- */
+  --color-primary: #DC2626;             /* Đỏ Việt Nam */
+  --color-primary-light: #EF4444;       /* Đỏ nhạt hơn (hover) */
+  --color-accent: #FBBF24;             /* Vàng ngôi sao */
+  --color-accent-light: #FCD34D;       /* Vàng nhạt (hover) */
+
+  /* --- Font chữ --- */
+  --font-sans: var(--font-geist-sans);  /* Font chính: Geist Sans */
+  --font-mono: var(--font-geist-mono);  /* Font code: Geist Mono */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ============================================================
+   GLOBAL STYLES — CSS áp dụng cho toàn bộ trang
+   ============================================================ */
 
+/* Reset mặc định: đặt nền tối cho body */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ============================================================
+   SCROLLBAR TÙY CHỈNH — Thanh cuộn đẹp hơn trên Chrome/Edge
+   Firefox dùng thuộc tính riêng (scrollbar-width, scrollbar-color)
+   ============================================================ */
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 8px;                          /* Độ rộng thanh cuộn */
+}
+::-webkit-scrollbar-track {
+  background: transparent;             /* Nền track: trong suốt */
+}
+::-webkit-scrollbar-thumb {
+  background: #333;                    /* Màu "núm cuộn": xám tối */
+  border-radius: 4px;                 /* Bo tròn góc */
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;                    /* Sáng hơn khi hover */
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+/* ============================================================
+   ANIMATION: Hiệu ứng "nhấp nháy" cho loading skeleton
+   Dùng khi data đang tải từ API
+   ============================================================ */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
