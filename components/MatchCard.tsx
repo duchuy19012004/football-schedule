@@ -20,6 +20,11 @@ import Image from "next/image";
 
 import { MatchEvent, VIETNAM_TEAM_ID } from "@/types/match";
 import { formatMatchDate, getMatchResult } from "@/lib/utils";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+// Kích hoạt plugin UTC cho dayjs
+dayjs.extend(utc);
 
 // ============================================================
 // ĐỊNH NGHĨA PROPS (tham số đầu vào của component)
@@ -69,21 +74,37 @@ export default function MatchCard({ match }: MatchCardProps) {
     isVietnamHome
   );
 
-  // --- Bước 4: Chọn màu viền theo kết quả ---
+  // --- Bước 4: Kiểm tra đã có tỷ số chưa ---
+  const hasScore =
+    match.intHomeScore !== null && match.intAwayScore !== null;
+
+  // --- Bước 5: Kiểm tra trận ĐÃ QUA thời gian nhưng CHƯA có tỷ số ---
+  // TheSportsDB free tier cập nhật tỷ số chậm (1-2 ngày)
+  // Nên cần kiểm tra: nếu thời gian kick-off đã qua → hiện "Đang cập nhật"
+  const matchTime = dayjs.utc(`${match.dateEvent}T${match.strTime}`);
+  const now = dayjs.utc();
+  // Trận coi như "đã qua" nếu đã qua 2 tiếng kể từ kick-off
+  const isPastKickoff = now.isAfter(matchTime.add(2, "hour"));
+  // Trạng thái: trận đã đá xong nhưng API chưa cập nhật tỷ số
+  const isAwaitingScore = isPastKickoff && !hasScore;
+
+  // --- Bước 6: Chọn màu viền theo kết quả ---
   // Mỗi kết quả có màu khác nhau để user dễ nhận biết
   const resultStyles: Record<string, string> = {
     win: "border-l-green-500 bg-green-500/5",    // Xanh lá = thắng
     lose: "border-l-red-500 bg-red-500/5",        // Đỏ = thua
     draw: "border-l-yellow-500 bg-yellow-500/5",  // Vàng = hòa
   };
-  // Nếu chưa có kết quả (chưa đá) → viền xanh dương
-  const cardStyle = result
-    ? resultStyles[result]
-    : "border-l-blue-500 bg-blue-500/5";
 
-  // --- Bước 5: Kiểm tra đã có tỷ số chưa ---
-  const hasScore =
-    match.intHomeScore !== null && match.intAwayScore !== null;
+  // Chọn style dựa trên trạng thái
+  let cardStyle: string;
+  if (result) {
+    cardStyle = resultStyles[result];         // Có kết quả → theo màu W/L/D
+  } else if (isAwaitingScore) {
+    cardStyle = "border-l-orange-500 bg-orange-500/5"; // Đang chờ tỷ số → cam
+  } else {
+    cardStyle = "border-l-blue-500 bg-blue-500/5";     // Chưa đá → xanh dương
+  }
 
   // --- Render JSX (HTML-like template) ---
   return (
@@ -118,7 +139,7 @@ export default function MatchCard({ match }: MatchCardProps) {
           </span>
         </div>
 
-        {/* Badge kết quả (W/L/D) */}
+        {/* Badge kết quả (W/L/D) hoặc trạng thái chờ */}
         {result && (
           <span
             className={`
@@ -130,6 +151,12 @@ export default function MatchCard({ match }: MatchCardProps) {
           >
             {/* Hiển thị chữ Việt thay vì W/L/D */}
             {result === "win" ? "THẮNG" : result === "lose" ? "THUA" : "HÒA"}
+          </span>
+        )}
+        {/* Nếu trận đã qua nhưng chưa có tỷ số → badge "CHỜ CẬP NHẬT" */}
+        {isAwaitingScore && (
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400">
+            CHỜ CẬP NHẬT
           </span>
         )}
       </div>
@@ -164,14 +191,24 @@ export default function MatchCard({ match }: MatchCardProps) {
         {/* === TỶ SỐ (ở giữa) === */}
         <div className="flex-shrink-0 text-center px-4">
           {hasScore ? (
-            // Đã có kết quả → hiển thị tỷ số lớn
+            // TRẠNG THÁI 1: Đã có tỷ số → hiển thị tỷ số lớn
             <div className="text-2xl md:text-3xl font-bold text-white">
               {match.intHomeScore}
               <span className="text-gray-500 mx-1">-</span>
               {match.intAwayScore}
             </div>
+          ) : isAwaitingScore ? (
+            // TRẠNG THÁI 2: Đã đá xong nhưng API chưa cập nhật tỷ số
+            <div className="text-center">
+              <div className="text-lg md:text-xl font-bold text-orange-400">
+                ? - ?
+              </div>
+              <div className="text-[10px] text-orange-400/70 uppercase">
+                Đang cập nhật
+              </div>
+            </div>
           ) : (
-            // Chưa đá → hiển thị giờ kick-off
+            // TRẠNG THÁI 3: Chưa đá → hiển thị giờ kick-off
             <div className="text-center">
               <div className="text-xl md:text-2xl font-bold text-blue-400">
                 {dateInfo.time}

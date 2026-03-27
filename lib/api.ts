@@ -34,11 +34,17 @@ const BASE_URL = "https://www.thesportsdb.com/api/v1/json/3";
  * Lấy từ API searchteams.php (đã kiểm tra).
  *
  * VD: Vòng loại World Cup AFC (id: 5513), Giao hữu quốc tế (id: 4562)...
+ *
+ * ⚠️ LƯU Ý: TheSportsDB free tier có data hạn chế.
+ * Nếu trận sắp tới không hiện, có thể giải đấu chưa được
+ * TheSportsDB cập nhật. Thêm league ID mới khi cần.
  */
 const VIETNAM_LEAGUE_IDS = [
-  "5513",   // World Cup Qualifying AFC (Vòng loại World Cup khu vực châu Á)
+  "5513",   // World Cup Qualifying AFC (Vòng loại World Cup châu Á)
   "4562",   // International Friendlies (Giao hữu quốc tế)
   "5521",   // AFC Asian Cup Qualifying (Vòng loại Asian Cup)
+  "4574",   // ASEAN Championship (Giải vô địch Đông Nam Á / AFF Cup)
+  "5072",   // AFF Mitsubishi Electric Cup
 ];
 
 // ============================================================
