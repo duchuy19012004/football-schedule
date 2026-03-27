@@ -1,27 +1,35 @@
 // ============================================================
 // FILE: types/match.ts
 // MỤC ĐÍCH: Định nghĩa kiểu dữ liệu (TypeScript types) cho
-//            thông tin trận đấu lấy từ TheSportsDB API.
+//            thông tin trận đấu.
 //
-// GIẢI THÍCH: TypeScript yêu cầu mọi dữ liệu phải có "kiểu"
-//   (type) rõ ràng. File này mô tả cấu trúc dữ liệu 1 trận đấu
-//   bao gồm những trường nào, kiểu gì (string, number, null...).
-//   Tất cả các file khác sẽ import types từ đây.
+// KIẾN TRÚC DUAL API:
+//   Website dùng 2 nguồn API:
+//   1. TheSportsDB (miễn phí, data 2025-2026 hiện tại)
+//   2. API-Football (miễn phí, data lịch sử 2022-2024)
+//
+//   Cả 2 API trả về format JSON khác nhau, nên cần 1 interface
+//   chung (MatchEvent) để components không cần quan tâm data
+//   đến từ API nào. Hàm "normalize" trong api.ts sẽ chuyển đổi
+//   data từ mỗi API sang format MatchEvent thống nhất.
 // ============================================================
 
 /**
- * MatchEvent — Kiểu dữ liệu cho 1 trận đấu từ TheSportsDB.
+ * MatchEvent — Kiểu dữ liệu CHUẨN cho 1 trận đấu.
  *
- * Mỗi trường (field) tương ứng với 1 thuộc tính trong JSON
- * mà API trả về. VD: "strEvent" chứa tên trận đấu.
+ * Đây là "interface trung gian" — dù data đến từ TheSportsDB
+ * hay API-Football, đều được chuyển về format này.
  *
- * Dấu "| null" nghĩa là trường đó có thể không có giá trị (null).
+ * Components (MatchCard, MatchList) chỉ biết đến MatchEvent,
+ * không cần biết data đến từ API nào.
+ *
+ * Dấu "| null" nghĩa là trường đó có thể không có giá trị.
  */
 export interface MatchEvent {
   // --- Thông tin cơ bản ---
   idEvent: string;                    // ID duy nhất của trận đấu
   strEvent: string;                   // Tên trận đấu, VD: "Vietnam vs Bangladesh"
-  strSport: string;                   // Môn thể thao, luôn là "Soccer"
+  source: "thesportsdb" | "api-football"; // Nguồn data (để debug)
 
   // --- Thông tin giải đấu ---
   idLeague: string;                   // ID giải đấu
@@ -45,30 +53,32 @@ export interface MatchEvent {
   dateEvent: string;                  // Ngày thi đấu, VD: "2026-03-26"
   strTime: string;                    // Giờ UTC, VD: "12:00:00"
   strTimestamp: string;               // Timestamp đầy đủ, VD: "2026-03-26T12:00:00"
-  strTimeLocal: string | null;        // Giờ địa phương (nếu có)
 
   // --- Địa điểm ---
   strVenue: string | null;            // Tên sân vận động
   strCountry: string | null;          // Quốc gia nơi thi đấu
 
   // --- Trạng thái ---
-  strStatus: string;                  // Trạng thái: "Not Started", "Match Finished", v.v.
-  strPostponed: string;               // "yes" hoặc "no" — trận có bị hoãn không
+  strStatus: string;                  // "Not Started", "Match Finished", v.v.
 
-  // --- Hình ảnh (tùy chọn) ---
+  // --- Hình ảnh ---
   strThumb: string | null;            // Ảnh thumbnail trận đấu
-  strPoster: string | null;           // Ảnh poster trận đấu
 
-  // --- Tỷ số chi tiết ---
+  // --- Vòng đấu ---
   intRound: string | null;            // Vòng đấu
-  strResult: string | null;           // Kết quả tóm tắt
 }
 
+// ============================================================
+// HẰNG SỐ TEAM ID
+// ============================================================
+
 /**
- * VIETNAM_TEAM_ID — ID của đội tuyển Việt Nam trong TheSportsDB.
- * Dùng để gọi API lấy data: eventslast.php?id=140161
+ * VIETNAM_TEAM_ID — ID đội tuyển Việt Nam trong từng API.
+ *
+ * Mỗi API có hệ thống ID riêng, nên cần 2 giá trị khác nhau.
  */
-export const VIETNAM_TEAM_ID = "140161";
+export const VIETNAM_TEAM_ID = "140161";          // TheSportsDB
+export const VIETNAM_TEAM_ID_AF = "1542";         // API-Football
 
 /**
  * MatchType — Phân loại trận đấu để hiển thị UI khác nhau.

@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
         hostname: "r2.thesportsdb.com",   // Domain chứa ảnh TheSportsDB
         pathname: "/images/**",           // Cho phép tất cả ảnh trong /images/
       },
+      {
+        protocol: "https",
+        hostname: "media.api-sports.io",  // Domain chứa ảnh API-Football
+        pathname: "/**",                  // Cho phép tất cả ảnh
+      },
     ],
   },
 };

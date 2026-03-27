@@ -1,145 +1,324 @@
 // ============================================================
 // FILE: lib/api.ts
-// MỤC ĐÍCH: Chứa tất cả các hàm gọi API đến TheSportsDB
-//            để lấy dữ liệu trận đấu của ĐT Việt Nam.
+// MỤC ĐÍCH: Chứa tất cả các hàm gọi API để lấy dữ liệu
+//            trận đấu của ĐT Việt Nam.
 //
-// KIẾN TRÚC NEXT.JS (giải thích):
-//   - Trong Next.js App Router, code ở thư mục "lib/" là code
-//     chạy trên SERVER (không phải trình duyệt).
-//   - Khi page.tsx gọi hàm từ file này, server sẽ fetch data
-//     từ API, xử lý xong rồi mới gửi HTML đến trình duyệt.
-//   - Lợi ích: nhanh hơn, SEO tốt hơn, bảo mật hơn.
+// KIẾN TRÚC DUAL API:
+//   Website sử dụng 2 nguồn dữ liệu MIỄN PHÍ:
 //
-// API SỬ DỤNG: TheSportsDB (https://www.thesportsdb.com)
-//   - Miễn phí, không cần đăng ký
-//   - API key mặc định: "3" (free tier)
-//   - Vietnam team ID: 140161
+//   ┌─────────────────────┐
+//   │  TheSportsDB (chính)│ → Data hiện tại (2025-2026)
+//   │  Không cần API key  │ → Trận sắp tới + kết quả gần đây
+//   │  Free, unlimited    │ → Cập nhật tỷ số chậm 1-2 ngày
+//   └────────┬────────────┘
+//            │
+//   ┌────────▼────────────┐
+//   │  API-Football (phụ) │ → Data lịch sử (2022-2024)
+//   │  Cần API key        │ → Bổ sung thêm trận đấu cũ
+//   │  Free 100 req/ngày  │ → Tỷ số chính xác, real-time
+//   └─────────────────────┘
+//
+//   Cả 2 API trả về format JSON KHÁC NHAU.
+//   Hàm "normalize" chuyển đổi về format MatchEvent chung.
+//
+// CÁCH HOẠT ĐỘNG:
+//   1. getPastMatches() → gọi TheSportsDB + API-Football
+//      → ghép kết quả + loại trùng → sắp xếp theo ngày
+//   2. getUpcomingMatches() → chỉ TheSportsDB (API-Football
+//      free tier không có data 2025-2026)
+//   3. getTeamInfo() → TheSportsDB team details
 // ============================================================
 
 import axios from "axios";
-import { MatchEvent, VIETNAM_TEAM_ID } from "@/types/match";
+import { MatchEvent, VIETNAM_TEAM_ID, VIETNAM_TEAM_ID_AF } from "@/types/match";
 
 // ============================================================
-// CẤU HÌNH (CONSTANTS)
+// CẤU HÌNH THESPORTSDB
 // ============================================================
 
 /**
- * BASE_URL — Đường dẫn gốc của TheSportsDB API.
- * Số "3" ở cuối là API key miễn phí (public key).
+ * BASE_URL — Đường dẫn gốc TheSportsDB API.
+ * Số "3" = API key miễn phí (public key).
  */
-const BASE_URL = "https://www.thesportsdb.com/api/v1/json/3";
+const TSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
 
 /**
- * Danh sách ID các giải đấu mà ĐT Việt Nam tham gia.
- * Lấy từ API searchteams.php (đã kiểm tra).
- *
- * VD: Vòng loại World Cup AFC (id: 5513), Giao hữu quốc tế (id: 4562)...
- *
- * ⚠️ LƯU Ý: TheSportsDB free tier có data hạn chế.
- * Nếu trận sắp tới không hiện, có thể giải đấu chưa được
- * TheSportsDB cập nhật. Thêm league ID mới khi cần.
+ * Danh sách ID giải đấu mà ĐT VN tham gia (TheSportsDB).
+ * Dùng cho getUpcomingMatches() vì eventsnext?id=TEAM_ID
+ * trả sai data trên free tier.
  */
 const VIETNAM_LEAGUE_IDS = [
-  "5513",   // World Cup Qualifying AFC (Vòng loại World Cup châu Á)
+  "5513",   // World Cup Qualifying AFC
   "4562",   // International Friendlies (Giao hữu quốc tế)
-  "5521",   // AFC Asian Cup Qualifying (Vòng loại Asian Cup)
-  "4574",   // ASEAN Championship (Giải vô địch Đông Nam Á / AFF Cup)
+  "5521",   // AFC Asian Cup Qualifying
+  "4574",   // ASEAN Championship (AFF Cup)
   "5072",   // AFF Mitsubishi Electric Cup
 ];
 
 // ============================================================
-// HÀM GỌI API
+// CẤU HÌNH API-FOOTBALL
 // ============================================================
 
 /**
- * getPastMatches — Lấy danh sách các trận ĐÃ ĐÁ gần nhất.
- *
- * CÁCH HOẠT ĐỘNG:
- *   1. Gọi API endpoint "eventslast.php" với team ID = 140161
- *   2. API trả về array JSON chứa 5 trận gần nhất đã kết thúc
- *   3. Hàm trả về array MatchEvent[] đã được type-safe
- *
- * API ENDPOINT: GET /eventslast.php?id=140161
- *
- * @returns Promise<MatchEvent[]> — Mảng các trận đấu đã qua
- *
- * LƯU Ý: "async/await" là cách viết code bất đồng bộ trong JS.
- *   Hàm async luôn trả về Promise. "await" = đợi kết quả trả về.
+ * AF_BASE — Đường dẫn gốc API-Football v3.
+ * Cần header "x-apisports-key" để xác thực.
+ * API key lấy từ biến môi trường (.env.local).
  */
-export async function getPastMatches(): Promise<MatchEvent[]> {
-  try {
-    // Gọi API bằng axios — tương tự fetch() nhưng tiện hơn
-    // axios.get() tự chuyển JSON → JavaScript object
-    const response = await axios.get(
-      `${BASE_URL}/eventslast.php?id=${VIETNAM_TEAM_ID}`
-    );
+const AF_BASE = "https://v3.football.api-sports.io";
 
-    // API trả về: { results: [...] } hoặc { results: null }
-    // Dấu "?." (optional chaining) = nếu null thì không bị lỗi
-    // Dấu "|| []" = nếu null thì trả mảng rỗng []
-    const matches: MatchEvent[] = response.data?.results || [];
-
-    return matches;
-  } catch (error) {
-    // Nếu API lỗi (mất mạng, server down...), in lỗi ra console
-    // và trả mảng rỗng để UI không bị crash
-    console.error("❌ Lỗi khi lấy trận đã qua:", error);
-    return [];
-  }
+/**
+ * afHeaders() — Tạo headers cho API-Football requests.
+ * Đọc API key từ process.env (biến môi trường).
+ *
+ * process.env.API_FOOTBALL_KEY = giá trị trong file .env.local
+ * Nếu không có key → trả object rỗng (skip API-Football)
+ */
+function afHeaders(): Record<string, string> {
+  const key = process.env.API_FOOTBALL_KEY;
+  if (!key) return {};
+  return { "x-apisports-key": key };
 }
 
 /**
- * getUpcomingMatches — Lấy danh sách các trận SẮP DIỄN RA.
+ * Seasons để query API-Football (free tier chỉ có 2022-2024).
+ * Query nhiều seasons để lấy nhiều trận hơn.
+ */
+const AF_SEASONS = [2024, 2023];
+
+// ============================================================
+// HÀM NORMALIZE — Chuyển đổi data về format chung
+// ============================================================
+
+/**
+ * normalizeFromTSDB — Chuyển data từ TheSportsDB sang MatchEvent.
+ *
+ * TheSportsDB trả JSON dạng "flat" (1 cấp):
+ *   { idEvent: "123", strHomeTeam: "Vietnam", intHomeScore: "2", ... }
+ *
+ * Format này gần giống MatchEvent nên chỉ cần thêm field "source".
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeFromTSDB(raw: any): MatchEvent {
+  return {
+    idEvent: raw.idEvent,
+    strEvent: raw.strEvent || `${raw.strHomeTeam} vs ${raw.strAwayTeam}`,
+    source: "thesportsdb",
+
+    idLeague: raw.idLeague,
+    strLeague: raw.strLeague,
+    strLeagueBadge: raw.strLeagueBadge || null,
+    strSeason: raw.strSeason,
+
+    idHomeTeam: raw.idHomeTeam,
+    strHomeTeam: raw.strHomeTeam,
+    strHomeTeamBadge: raw.strHomeTeamBadge || null,
+    intHomeScore: raw.intHomeScore ?? null,
+
+    idAwayTeam: raw.idAwayTeam,
+    strAwayTeam: raw.strAwayTeam,
+    strAwayTeamBadge: raw.strAwayTeamBadge || null,
+    intAwayScore: raw.intAwayScore ?? null,
+
+    dateEvent: raw.dateEvent,
+    strTime: raw.strTime || "00:00:00",
+    strTimestamp: raw.strTimestamp || `${raw.dateEvent}T${raw.strTime || "00:00:00"}`,
+
+    strVenue: raw.strVenue || null,
+    strCountry: raw.strCountry || null,
+
+    strStatus: raw.strStatus || "Not Started",
+    strThumb: raw.strThumb || null,
+    intRound: raw.intRound || null,
+  };
+}
+
+/**
+ * normalizeFromAF — Chuyển data từ API-Football sang MatchEvent.
+ *
+ * API-Football trả JSON dạng "nested" (nhiều cấp):
+ *   {
+ *     fixture: { id: 123, date: "2024-03-26T12:00:00+00:00", venue: {...} },
+ *     league: { id: 4, name: "Friendlies", logo: "..." },
+ *     teams: { home: { id: 1542, name: "Vietnam", logo: "..." }, away: {...} },
+ *     goals: { home: 2, away: 1 },
+ *   }
+ *
+ * Cần "flatten" (làm phẳng) về format MatchEvent.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeFromAF(raw: any): MatchEvent {
+  // Tách timestamp thành date + time
+  // VD: "2024-03-26T12:00:00+00:00" → date="2024-03-26", time="12:00:00"
+  const dateStr = raw.fixture?.date || "";
+  const dateObj = new Date(dateStr);
+  const date = dateStr.substring(0, 10); // "2024-03-26"
+  const time = dateObj.toISOString().substring(11, 19); // "12:00:00"
+
+  // Map trạng thái: API-Football dùng mã ngắn, ta chuyển sang text
+  const statusMap: Record<string, string> = {
+    NS: "Not Started",     // Not Started
+    "1H": "1st Half",      // Hiệp 1
+    HT: "Half Time",       // Giữa hiệp
+    "2H": "2nd Half",      // Hiệp 2
+    FT: "Match Finished",  // Kết thúc
+    AET: "After Extra Time",
+    PEN: "Penalty",
+    PST: "Postponed",      // Hoãn
+    CANC: "Cancelled",     // Hủy
+    TBD: "TBD",            // Chưa xác định
+  };
+
+  return {
+    idEvent: `af-${raw.fixture?.id}`, // Prefix "af-" để phân biệt với TheSportsDB
+    strEvent: `${raw.teams?.home?.name} vs ${raw.teams?.away?.name}`,
+    source: "api-football",
+
+    idLeague: String(raw.league?.id || ""),
+    strLeague: raw.league?.name || "Unknown League",
+    strLeagueBadge: raw.league?.logo || null,
+    strSeason: String(raw.league?.season || ""),
+
+    // ⚠️ API-Football dùng ID riêng, cần convert sang TheSportsDB ID
+    // Dùng VIETNAM_TEAM_ID cho đội VN dù data từ AF (để MatchCard nhận diện)
+    idHomeTeam: raw.teams?.home?.id === Number(VIETNAM_TEAM_ID_AF)
+      ? VIETNAM_TEAM_ID
+      : String(raw.teams?.home?.id),
+    strHomeTeam: raw.teams?.home?.name || "Unknown",
+    strHomeTeamBadge: raw.teams?.home?.logo || null,
+    intHomeScore: raw.goals?.home != null ? String(raw.goals.home) : null,
+
+    idAwayTeam: raw.teams?.away?.id === Number(VIETNAM_TEAM_ID_AF)
+      ? VIETNAM_TEAM_ID
+      : String(raw.teams?.away?.id),
+    strAwayTeam: raw.teams?.away?.name || "Unknown",
+    strAwayTeamBadge: raw.teams?.away?.logo || null,
+    intAwayScore: raw.goals?.away != null ? String(raw.goals.away) : null,
+
+    dateEvent: date,
+    strTime: time,
+    strTimestamp: dateStr,
+
+    strVenue: raw.fixture?.venue?.name || null,
+    strCountry: raw.fixture?.venue?.city || null,
+
+    strStatus: statusMap[raw.fixture?.status?.short] || raw.fixture?.status?.long || "Unknown",
+    strThumb: null,
+    intRound: raw.league?.round || null,
+  };
+}
+
+// ============================================================
+// HÀM GỌI API — PAST MATCHES
+// ============================================================
+
+/**
+ * getPastMatches — Lấy danh sách trận ĐÃ ĐÁ.
+ *
+ * CHIẾN LƯỢC:
+ *   1. TheSportsDB: eventslast (5 trận gần nhất, có thể chưa có tỷ số)
+ *   2. API-Football: fixtures?team=1542&season=2024 (data cũ nhưng chính xác)
+ *   3. Ghép kết quả, loại trùng theo tên + ngày, sắp xếp mới nhất trước
+ *
+ * @returns Promise<MatchEvent[]> — Mảng trận đấu đã qua
+ */
+export async function getPastMatches(): Promise<MatchEvent[]> {
+  // Mảng chứa kết quả từ cả 2 API
+  const allMatches: MatchEvent[] = [];
+
+  // --- NGUỒN 1: TheSportsDB ---
+  try {
+    const tsdbRes = await axios.get(
+      `${TSDB_BASE}/eventslast.php?id=${VIETNAM_TEAM_ID}`
+    );
+    const tsdbMatches = tsdbRes.data?.results || [];
+    allMatches.push(...tsdbMatches.map(normalizeFromTSDB));
+  } catch (error) {
+    console.error("❌ TheSportsDB (past) lỗi:", error);
+  }
+
+  // --- NGUỒN 2: API-Football (nếu có API key) ---
+  const key = process.env.API_FOOTBALL_KEY;
+  if (key) {
+    try {
+      // Gọi nhiều seasons song song
+      const promises = AF_SEASONS.map((season) =>
+        axios.get(`${AF_BASE}/fixtures`, {
+          headers: afHeaders(),
+          params: { team: VIETNAM_TEAM_ID_AF, season, status: "FT" },
+          // status: "FT" = chỉ lấy trận đã kết thúc (Finished)
+        })
+      );
+
+      const results = await Promise.allSettled(promises);
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          const fixtures = result.value.data?.response || [];
+          allMatches.push(...fixtures.map(normalizeFromAF));
+        }
+      }
+    } catch (error) {
+      console.error("❌ API-Football (past) lỗi:", error);
+    }
+  }
+
+  // --- Loại trùng: so sánh theo (đội nhà + đội khách + ngày) ---
+  const seen = new Set<string>();
+  const uniqueMatches = allMatches.filter((match) => {
+    // Tạo "key" duy nhất cho mỗi trận
+    const key = `${match.strHomeTeam}-${match.strAwayTeam}-${match.dateEvent}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // --- Sắp xếp: trận mới nhất lên trước ---
+  uniqueMatches.sort((a, b) => b.dateEvent.localeCompare(a.dateEvent));
+
+  // Giới hạn 15 trận gần nhất
+  return uniqueMatches.slice(0, 15);
+}
+
+// ============================================================
+// HÀM GỌI API — UPCOMING MATCHES
+// ============================================================
+
+/**
+ * getUpcomingMatches — Lấy danh sách trận SẮP DIỄN RA.
+ *
+ * Chỉ dùng TheSportsDB vì API-Football free tier
+ * không có data season 2025-2026.
  *
  * CÁCH HOẠT ĐỘNG:
- *   1. Gọi API "eventsnext.php" cho TỪNG GIẢI ĐẤU Việt Nam tham gia
- *   2. Từ mỗi giải, lọc ra trận nào có ĐT Việt Nam (check team ID)
- *   3. Ghép tất cả lại, sắp xếp theo ngày gần nhất
- *
- * TẠI SAO KHÔNG DÙNG eventsnext.php?id=TEAM_ID?
- *   → Vì API free tier trả về sai data khi query theo team ID
- *     cho eventsnext. Nên phải query theo league rồi filter.
- *
- * @returns Promise<MatchEvent[]> — Mảng các trận sắp diễn ra
+ *   1. Gọi API "eventsnext.php" cho TỪNG GIẢI ĐẤU VN tham gia
+ *   2. Lọc trận có ĐT Việt Nam (check team ID)
+ *   3. Sắp xếp theo ngày gần nhất
  */
 export async function getUpcomingMatches(): Promise<MatchEvent[]> {
   try {
-    // Tạo mảng các Promise — mỗi Promise gọi API cho 1 giải đấu
-    // Promise.allSettled() gọi tất cả cùng lúc (song song), nhanh hơn
+    // Gọi API cho từng giải đấu song song
     const promises = VIETNAM_LEAGUE_IDS.map((leagueId) =>
-      axios.get(`${BASE_URL}/eventsnext.php?id=${leagueId}`)
+      axios.get(`${TSDB_BASE}/eventsnext.php?id=${leagueId}`)
     );
 
-    // Đợi TẤT CẢ các API call hoàn thành
-    // "allSettled" = không bị crash nếu 1 trong các call bị lỗi
     const results = await Promise.allSettled(promises);
-
-    // Mảng chứa tất cả các trận sắp tới
     const allMatches: MatchEvent[] = [];
 
-    // Duyệt qua kết quả của từng giải đấu
     for (const result of results) {
-      // Chỉ xử lý những call thành công (status = "fulfilled")
       if (result.status === "fulfilled") {
-        const events: MatchEvent[] = result.value.data?.events || [];
-
-        // Lọc: chỉ lấy trận nào có ĐT Việt Nam (nhà HOẶC khách)
+        const events = result.value.data?.events || [];
+        // Lọc: chỉ lấy trận nào có ĐT Việt Nam
         const vietnamMatches = events.filter(
-          (event) =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (event: any) =>
             event.idHomeTeam === VIETNAM_TEAM_ID ||
             event.idAwayTeam === VIETNAM_TEAM_ID
         );
-
-        // Thêm vào mảng tổng
-        allMatches.push(...vietnamMatches);
+        allMatches.push(...vietnamMatches.map(normalizeFromTSDB));
       }
     }
 
-    // Sắp xếp theo ngày: trận gần nhất lên trước
-    // localeCompare so sánh 2 chuỗi ngày (vì format YYYY-MM-DD nên so sánh string OK)
-    allMatches.sort((a, b) =>
-      a.dateEvent.localeCompare(b.dateEvent)
-    );
+    // Sắp xếp: trận gần nhất lên trước
+    allMatches.sort((a, b) => a.dateEvent.localeCompare(b.dateEvent));
 
     return allMatches;
   } catch (error) {
@@ -148,22 +327,19 @@ export async function getUpcomingMatches(): Promise<MatchEvent[]> {
   }
 }
 
+// ============================================================
+// HÀM GỌI API — TEAM INFO
+// ============================================================
+
 /**
- * getTeamInfo — Lấy thông tin ĐT Việt Nam (logo, mô tả, sân nhà...).
- *
- * CÁCH HOẠT ĐỘNG:
- *   Gọi API "lookupteam.php" với team ID = 140161
- *   Trả về object chứa đầy đủ thông tin đội bóng.
- *
- * @returns Thông tin đội bóng hoặc null nếu lỗi
+ * getTeamInfo — Lấy thông tin ĐT Việt Nam (logo, mô tả...).
+ * Dùng TheSportsDB lookupteam endpoint.
  */
 export async function getTeamInfo() {
   try {
     const response = await axios.get(
-      `${BASE_URL}/lookupteam.php?id=${VIETNAM_TEAM_ID}`
+      `${TSDB_BASE}/lookupteam.php?id=${VIETNAM_TEAM_ID}`
     );
-    // API trả về: { teams: [{...}] }
-    // Lấy phần tử đầu tiên ([0]) vì chỉ có 1 đội
     return response.data?.teams?.[0] || null;
   } catch (error) {
     console.error("❌ Lỗi khi lấy thông tin đội:", error);

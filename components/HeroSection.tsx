@@ -9,7 +9,7 @@
 //   - Dùng gradient CSS để tạo nền đẹp
 // ============================================================
 
-import Image from "next/image";
+// Không cần import Image nữa — dùng <img> thông thường
 
 // ============================================================
 // COMPONENT CHÍNH
@@ -36,29 +36,25 @@ export default function HeroSection({
 }) {
   return (
     <section className="relative overflow-hidden rounded-2xl mb-8">
-      {/* === NỀN GRADIENT ===
-          Tạo nền gradient từ đỏ đậm → đỏ tối
-          Màu đỏ tượng trưng cho ĐT Việt Nam 🇻🇳 */}
+      {/* === NỀN GRADIENT === */}
       <div className="absolute inset-0 bg-gradient-to-br from-red-900/80 via-red-800/60 to-gray-900" />
 
-      {/* Hiệu ứng decorative: vòng tròn vàng mờ ở góc */}
+      {/* Hiệu ứng decorative */}
       <div className="absolute -top-20 -right-20 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl" />
       <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-red-500/20 rounded-full blur-2xl" />
 
       {/* === NỘI DUNG HERO === */}
       <div className="relative z-10 px-6 py-10 md:py-16 flex flex-col items-center text-center">
-        {/* Logo ĐT Việt Nam */}
+        {/* Logo ĐT Việt Nam — dùng <img> thay vì <Image> */}
         {badgeUrl && (
           <div className="mb-4 drop-shadow-2xl">
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={badgeUrl}
               alt="Logo Đội tuyển Việt Nam"
               width={80}
               height={80}
-              className="rounded-xl"
-              priority
-              // "priority" = tải ảnh này trước (không lazy load)
-              // Vì logo ở đầu trang, cần hiển thị ngay lập tức
+              className="rounded-xl w-20 h-20 object-contain"
             />
           </div>
         )}

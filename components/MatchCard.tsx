@@ -7,16 +7,11 @@
 // KIẾN TRÚC NEXT.JS:
 //   - Đây là SERVER Component (không có "use client" ở đầu file)
 //   - Server Component = render trên server → gửi HTML cho client
-//   - Không cần interactivity (click/hover state) nên dùng Server
-//   - Logo đội bóng dùng component <Image> của Next.js để tối ưu
+//   - Dùng thẻ <img> thay vì <Image> của Next.js cho logo
+//     vì ảnh đến từ nhiều API domains khác nhau (TheSportsDB,
+//     API-Football) và Next.js Image optimizer có thể bị lỗi 500
+//     khi xử lý ảnh từ external domains.
 // ============================================================
-
-import Image from "next/image";
-// import Image từ next/image thay vì dùng <img> HTML thông thường
-// Lý do: Next.js Image tự động:
-//   - Resize ảnh theo kích thước cần thiết
-//   - Chuyển sang format WebP (nhỏ hơn)
-//   - Lazy loading (chỉ tải khi cuộn đến)
 
 import { MatchEvent, VIETNAM_TEAM_ID } from "@/types/match";
 import { formatMatchDate, getMatchResult } from "@/lib/utils";
@@ -27,17 +22,11 @@ import utc from "dayjs/plugin/utc";
 dayjs.extend(utc);
 
 // ============================================================
-// ĐỊNH NGHĨA PROPS (tham số đầu vào của component)
+// ĐỊNH NGHĨA PROPS
 // ============================================================
 
-/**
- * Props cho MatchCard component.
- *
- * "interface" = mô tả hình dạng của object trong TypeScript.
- * Component nhận vào 1 prop là "match" (dữ liệu 1 trận đấu).
- */
 interface MatchCardProps {
-  match: MatchEvent;   // Dữ liệu trận đấu (từ types/match.ts)
+  match: MatchEvent;
 }
 
 // ============================================================
@@ -46,9 +35,6 @@ interface MatchCardProps {
 
 /**
  * MatchCard — Component hiển thị 1 trận đấu.
- *
- * CÁCH SỬ DỤNG:
- *   <MatchCard match={matchData} />
  *
  * HIỂN THỊ:
  *   ┌──────────────────────────────────┐
@@ -79,36 +65,28 @@ export default function MatchCard({ match }: MatchCardProps) {
     match.intHomeScore !== null && match.intAwayScore !== null;
 
   // --- Bước 5: Kiểm tra trận ĐÃ QUA thời gian nhưng CHƯA có tỷ số ---
-  // TheSportsDB free tier cập nhật tỷ số chậm (1-2 ngày)
-  // Nên cần kiểm tra: nếu thời gian kick-off đã qua → hiện "Đang cập nhật"
   const matchTime = dayjs.utc(`${match.dateEvent}T${match.strTime}`);
   const now = dayjs.utc();
-  // Trận coi như "đã qua" nếu đã qua 2 tiếng kể từ kick-off
   const isPastKickoff = now.isAfter(matchTime.add(2, "hour"));
-  // Trạng thái: trận đã đá xong nhưng API chưa cập nhật tỷ số
   const isAwaitingScore = isPastKickoff && !hasScore;
 
   // --- Bước 6: Chọn màu viền theo kết quả ---
-  // Mỗi kết quả có màu khác nhau để user dễ nhận biết
   const resultStyles: Record<string, string> = {
-    win: "border-l-green-500 bg-green-500/5",    // Xanh lá = thắng
-    lose: "border-l-red-500 bg-red-500/5",        // Đỏ = thua
-    draw: "border-l-yellow-500 bg-yellow-500/5",  // Vàng = hòa
+    win: "border-l-green-500 bg-green-500/5",
+    lose: "border-l-red-500 bg-red-500/5",
+    draw: "border-l-yellow-500 bg-yellow-500/5",
   };
 
-  // Chọn style dựa trên trạng thái
   let cardStyle: string;
   if (result) {
-    cardStyle = resultStyles[result];         // Có kết quả → theo màu W/L/D
+    cardStyle = resultStyles[result];
   } else if (isAwaitingScore) {
-    cardStyle = "border-l-orange-500 bg-orange-500/5"; // Đang chờ tỷ số → cam
+    cardStyle = "border-l-orange-500 bg-orange-500/5";
   } else {
-    cardStyle = "border-l-blue-500 bg-blue-500/5";     // Chưa đá → xanh dương
+    cardStyle = "border-l-blue-500 bg-blue-500/5";
   }
 
-  // --- Render JSX (HTML-like template) ---
   return (
-    // Thẻ div bao ngoài — viền trái 4px, bo góc, hiệu ứng hover
     <div
       className={`
         border-l-4 ${cardStyle}
@@ -117,21 +95,19 @@ export default function MatchCard({ match }: MatchCardProps) {
         hover:shadow-lg hover:shadow-black/5
         hover:-translate-y-0.5
       `}
-      // "transition-all duration-300" = animation mượt 300ms khi hover
-      // "hover:-translate-y-0.5" = nhấc card lên 2px khi hover
     >
-      {/* --- Tên giải đấu + Vòng đấu --- */}
+      {/* --- Tên giải đấu --- */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          {/* Logo giải đấu (nếu có) */}
           {match.strLeagueBadge && (
-            <Image
+            // Dùng <img> thay vì <Image> để tránh lỗi optimizer
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={match.strLeagueBadge}
               alt={match.strLeague}
               width={20}
               height={20}
-              className="rounded"
-              // Next.js Image yêu cầu width + height để tránh layout shift
+              className="rounded w-5 h-5 object-contain"
             />
           )}
           <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -139,7 +115,7 @@ export default function MatchCard({ match }: MatchCardProps) {
           </span>
         </div>
 
-        {/* Badge kết quả (W/L/D) hoặc trạng thái chờ */}
+        {/* Badge kết quả */}
         {result && (
           <span
             className={`
@@ -149,11 +125,9 @@ export default function MatchCard({ match }: MatchCardProps) {
               ${result === "draw" ? "bg-yellow-500/20 text-yellow-400" : ""}
             `}
           >
-            {/* Hiển thị chữ Việt thay vì W/L/D */}
             {result === "win" ? "THẮNG" : result === "lose" ? "THUA" : "HÒA"}
           </span>
         )}
-        {/* Nếu trận đã qua nhưng chưa có tỷ số → badge "CHỜ CẬP NHẬT" */}
         {isAwaitingScore && (
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400">
             CHỜ CẬP NHẬT
@@ -163,24 +137,24 @@ export default function MatchCard({ match }: MatchCardProps) {
 
       {/* --- Phần chính: 2 đội + tỷ số --- */}
       <div className="flex items-center justify-between gap-2">
-        {/* === ĐỘI NHÀ (bên trái) === */}
+        {/* === ĐỘI NHÀ === */}
         <div className="flex-1 flex items-center gap-3">
-          {/* Logo đội nhà */}
           {match.strHomeTeamBadge && (
-            <Image
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={match.strHomeTeamBadge}
               alt={match.strHomeTeam}
               width={40}
               height={40}
-              className="rounded-lg"
+              className="rounded-lg w-10 h-10 object-contain"
             />
           )}
           <span
             className={`
               text-sm md:text-base font-semibold
               ${match.idHomeTeam === VIETNAM_TEAM_ID
-                ? "text-yellow-400"   // Nếu VN = highlight vàng
-                : "text-gray-200"     // Đội khác = màu xám nhạt
+                ? "text-yellow-400"
+                : "text-gray-200"
               }
             `}
           >
@@ -188,17 +162,15 @@ export default function MatchCard({ match }: MatchCardProps) {
           </span>
         </div>
 
-        {/* === TỶ SỐ (ở giữa) === */}
+        {/* === TỶ SỐ === */}
         <div className="flex-shrink-0 text-center px-4">
           {hasScore ? (
-            // TRẠNG THÁI 1: Đã có tỷ số → hiển thị tỷ số lớn
             <div className="text-2xl md:text-3xl font-bold text-white">
               {match.intHomeScore}
               <span className="text-gray-500 mx-1">-</span>
               {match.intAwayScore}
             </div>
           ) : isAwaitingScore ? (
-            // TRẠNG THÁI 2: Đã đá xong nhưng API chưa cập nhật tỷ số
             <div className="text-center">
               <div className="text-lg md:text-xl font-bold text-orange-400">
                 ? - ?
@@ -208,7 +180,6 @@ export default function MatchCard({ match }: MatchCardProps) {
               </div>
             </div>
           ) : (
-            // TRẠNG THÁI 3: Chưa đá → hiển thị giờ kick-off
             <div className="text-center">
               <div className="text-xl md:text-2xl font-bold text-blue-400">
                 {dateInfo.time}
@@ -220,7 +191,7 @@ export default function MatchCard({ match }: MatchCardProps) {
           )}
         </div>
 
-        {/* === ĐỘI KHÁCH (bên phải) === */}
+        {/* === ĐỘI KHÁCH === */}
         <div className="flex-1 flex items-center justify-end gap-3">
           <span
             className={`
@@ -233,25 +204,22 @@ export default function MatchCard({ match }: MatchCardProps) {
           >
             {match.strAwayTeam}
           </span>
-          {/* Logo đội khách */}
           {match.strAwayTeamBadge && (
-            <Image
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={match.strAwayTeamBadge}
               alt={match.strAwayTeam}
               width={40}
               height={40}
-              className="rounded-lg"
+              className="rounded-lg w-10 h-10 object-contain"
             />
           )}
         </div>
       </div>
 
-      {/* --- Ngày giờ + Địa điểm (phía dưới) --- */}
+      {/* --- Ngày giờ + Địa điểm --- */}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-        {/* Biểu tượng lịch + ngày giờ đầy đủ */}
         <span>📅 {dateInfo.full}</span>
-
-        {/* Tên sân vận động (nếu có) */}
         {match.strVenue && <span>📍 {match.strVenue}</span>}
       </div>
     </div>
