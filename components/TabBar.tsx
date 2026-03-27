@@ -17,6 +17,11 @@
 //   - Browser APIs (window, document, localStorage...)
 //
 //   Server Component (mặc định) KHÔNG dùng được những thứ trên.
+//
+//   ⚠️ LƯU Ý QUAN TRỌNG:
+//   Không thể truyền FUNCTION làm children từ Server → Client.
+//   Thay vào đó, truyền 2 khối JSX đã render sẵn (ReactNode)
+//   rồi dùng CSS ẩn/hiện để chuyển tab.
 // ============================================================
 
 "use client";
@@ -32,13 +37,11 @@ import { useState, type ReactNode } from "react";
 // ============================================================
 
 interface TabBarProps {
-  // "children" đặc biệt: là nội dung BÊN TRONG component
-  // VD: <TabBar> <div>Nội dung</div> </TabBar>
-  //     → children = <div>Nội dung</div>
-  //
-  // Ở đây ta dùng "render props pattern":
-  // children là 1 HÀM nhận vào tab hiện tại, trả về JSX
-  children: (activeTab: "results" | "upcoming") => ReactNode;
+  // Nhận 2 khối nội dung đã render sẵn (ReactNode, không phải function)
+  // Server Component (page.tsx) sẽ render MatchList thành HTML
+  // rồi truyền HTML đó vào đây dưới dạng ReactNode
+  resultsContent: ReactNode;   // Nội dung tab "Kết quả"
+  upcomingContent: ReactNode;  // Nội dung tab "Lịch thi đấu"
 }
 
 // ============================================================
@@ -49,21 +52,21 @@ interface TabBarProps {
  * TabBar — Component chuyển tab giữa Kết quả / Lịch thi đấu.
  *
  * CÁCH SỬ DỤNG (ở page.tsx):
- *   <TabBar>
- *     {(activeTab) => (
- *       activeTab === "results"
- *         ? <MatchList ... />    // Hiện kết quả
- *         : <MatchList ... />    // Hiện lịch thi đấu
- *     )}
- *   </TabBar>
+ *   <TabBar
+ *     resultsContent={<MatchList ... />}
+ *     upcomingContent={<MatchList ... />}
+ *   />
  *
- * HIỂN THỊ:
- *   ┌──────────────────────────────────┐
- *   │  [🏆 Kết quả]  [📅 Lịch thi đấu] │  ← 2 tab buttons
- *   └──────────────────────────────────┘
- *   Khi click tab → nội dung bên dưới thay đổi tương ứng
+ * CÁCH ẨN/HIỆN:
+ *   Cả 2 tab content đều được render sẵn trong DOM.
+ *   Tab không active sẽ bị ẩn bằng CSS "hidden" (display: none).
+ *   Khi chuyển tab → chỉ thay đổi class CSS, KHÔNG fetch lại data.
+ *   → Chuyển tab cực nhanh, không loading!
  */
-export default function TabBar({ children }: TabBarProps) {
+export default function TabBar({
+  resultsContent,
+  upcomingContent,
+}: TabBarProps) {
   // === useState HOOK ===
   // activeTab = biến lưu tab hiện tại ("results" hoặc "upcoming")
   // setActiveTab = hàm để thay đổi giá trị activeTab
@@ -118,9 +121,15 @@ export default function TabBar({ children }: TabBarProps) {
       </div>
 
       {/* === NỘI DUNG TAB ===
-          Gọi children(activeTab) = chạy hàm render do parent truyền vào
-          Tùy theo activeTab, parent sẽ render nội dung khác nhau */}
-      <div>{children(activeTab)}</div>
+          Cả 2 tab đều nằm trong DOM, nhưng chỉ 1 tab hiện.
+          Tab không active có class "hidden" (display: none).
+          Khi user chuyển tab → đổi class → hiện/ẩn ngay lập tức. */}
+      <div className={activeTab === "results" ? "" : "hidden"}>
+        {resultsContent}
+      </div>
+      <div className={activeTab === "upcoming" ? "" : "hidden"}>
+        {upcomingContent}
+      </div>
     </div>
   );
 }

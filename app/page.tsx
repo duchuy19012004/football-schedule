@@ -132,36 +132,38 @@ export default async function Home() {
         {/* === TAB BAR + NỘI DUNG === */}
         {/*
           TabBar là Client Component (có "use client")
-          Nó nhận children là 1 HÀM: (activeTab) => JSX
+          Nó nhận 2 props: resultsContent và upcomingContent
 
-          Khi user click tab:
-            - TabBar cập nhật state (activeTab)
-            - Gọi lại children(activeTab) với giá trị mới
-            - Render nội dung tương ứng
+          ⚠️ QUAN TRỌNG (Server/Client boundary):
+          KHÔNG THỂ truyền FUNCTION từ Server → Client Component.
+          Thay vào đó, Server Component render sẵn 2 khối MatchList
+          thành ReactNode (HTML), rồi truyền vào TabBar.
+
+          TabBar chỉ việc ẩn/hiện bằng CSS "hidden" class.
+          → Chuyển tab cực nhanh, không cần fetch lại data!
 
           DATA (pastMatches, upcomingMatches) đã được fetch
           trên server, rồi truyền xuống dưới dạng props.
           Client Component (TabBar) KHÔNG gọi API — chỉ hiển thị.
         */}
-        <TabBar>
-          {(activeTab) =>
-            activeTab === "results" ? (
-              // Tab "Kết quả" → hiện danh sách trận đã đá
-              <MatchList
-                matches={pastMatches}
-                title="🏆 Kết quả gần đây"
-                emptyMessage="Chưa có kết quả trận đấu nào"
-              />
-            ) : (
-              // Tab "Lịch thi đấu" → hiện danh sách trận sắp tới
-              <MatchList
-                matches={upcomingMatches}
-                title="📅 Lịch thi đấu sắp tới"
-                emptyMessage="Chưa có lịch thi đấu sắp tới"
-              />
-            )
+        <TabBar
+          resultsContent={
+            // Tab "Kết quả" → hiện danh sách trận đã đá
+            <MatchList
+              matches={pastMatches}
+              title="🏆 Kết quả gần đây"
+              emptyMessage="Chưa có kết quả trận đấu nào"
+            />
           }
-        </TabBar>
+          upcomingContent={
+            // Tab "Lịch thi đấu" → hiện danh sách trận sắp tới
+            <MatchList
+              matches={upcomingMatches}
+              title="📅 Lịch thi đấu sắp tới"
+              emptyMessage="Chưa có lịch thi đấu sắp tới"
+            />
+          }
+        />
 
         {/* === FOOTER === */}
         <footer className="mt-12 pt-6 border-t border-gray-800/50 text-center">
