@@ -27,6 +27,7 @@
 // ============================================================
 
 import { getPastMatches, getUpcomingMatches, getTeamInfo } from "@/lib/api";
+import { VN_BADGE } from "@/data/fixtures";
 // Import 3 hàm gọi API từ lib/api.ts (Phase 2 đã tạo)
 
 import HeroSection from "@/components/HeroSection";
@@ -121,7 +122,7 @@ export default async function Home() {
 
         {/* === HERO SECTION === */}
         {/* Truyền badgeUrl (link logo đội) vào HeroSection */}
-        <HeroSection badgeUrl={teamInfo?.strBadge} />
+        <HeroSection badgeUrl={VN_BADGE} />
         {/*
           "teamInfo?.strBadge"
           Dấu "?." = optional chaining

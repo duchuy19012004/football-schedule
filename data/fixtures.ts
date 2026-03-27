@@ -25,7 +25,7 @@
 import { MatchEvent } from "@/types/match";
 
 // Logo ĐT Việt Nam từ TheSportsDB (dùng chung cho tất cả trận)
-const VN_BADGE = "https://r2.thesportsdb.com/images/media/team/badge/i18iu41597944056.png";
+export const VN_BADGE = "https://r2.thesportsdb.com/images/media/team/badge/i18iu41597944056.png";
 const VN_TEAM_ID = "140161"; // TheSportsDB ID — MatchCard dùng để highlight vàng
 
 /**

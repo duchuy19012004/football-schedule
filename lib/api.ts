@@ -31,7 +31,7 @@
 
 import axios from "axios";
 import { MatchEvent, VIETNAM_TEAM_ID, VIETNAM_TEAM_ID_AF } from "@/types/match";
-import { PAST_RESULTS, UPCOMING_FIXTURES } from "@/data/fixtures";
+import { PAST_RESULTS, UPCOMING_FIXTURES, VN_BADGE } from "@/data/fixtures";
 
 // ============================================================
 // CẤU HÌNH THESPORTSDB
@@ -112,12 +112,16 @@ function normalizeFromTSDB(raw: any): MatchEvent {
 
     idHomeTeam: raw.idHomeTeam,
     strHomeTeam: raw.strHomeTeam,
-    strHomeTeamBadge: raw.strHomeTeamBadge || null,
+    strHomeTeamBadge: raw.idHomeTeam === VIETNAM_TEAM_ID
+      ? VN_BADGE
+      : (raw.strHomeTeamBadge || null),
     intHomeScore: raw.intHomeScore ?? null,
 
     idAwayTeam: raw.idAwayTeam,
     strAwayTeam: raw.strAwayTeam,
-    strAwayTeamBadge: raw.strAwayTeamBadge || null,
+    strAwayTeamBadge: raw.idAwayTeam === VIETNAM_TEAM_ID
+      ? VN_BADGE
+      : (raw.strAwayTeamBadge || null),
     intAwayScore: raw.intAwayScore ?? null,
 
     dateEvent: raw.dateEvent,
@@ -169,7 +173,15 @@ function normalizeFromAF(raw: any): MatchEvent {
     TBD: "TBD",            // Chưa xác định
   };
 
-  return {
+    // Check if home team is Vietnam (either AF ID or TSDB ID)
+    const isHomeVietnam = raw.teams?.home?.id === Number(VIETNAM_TEAM_ID_AF)
+      ? VIETNAM_TEAM_ID
+      : String(raw.teams?.home?.id);
+    const isAwayVietnam = raw.teams?.away?.id === Number(VIETNAM_TEAM_ID_AF)
+      ? VIETNAM_TEAM_ID
+      : String(raw.teams?.away?.id);
+
+    return {
     idEvent: `af-${raw.fixture?.id}`, // Prefix "af-" để phân biệt với TheSportsDB
     strEvent: `${raw.teams?.home?.name} vs ${raw.teams?.away?.name}`,
     source: "api-football",
@@ -185,14 +197,18 @@ function normalizeFromAF(raw: any): MatchEvent {
       ? VIETNAM_TEAM_ID
       : String(raw.teams?.home?.id),
     strHomeTeam: raw.teams?.home?.name || "Unknown",
-    strHomeTeamBadge: raw.teams?.home?.logo || null,
+    strHomeTeamBadge: isHomeVietnam === VIETNAM_TEAM_ID
+      ? VN_BADGE
+      : (raw.teams?.home?.logo || null),
     intHomeScore: raw.goals?.home != null ? String(raw.goals.home) : null,
 
     idAwayTeam: raw.teams?.away?.id === Number(VIETNAM_TEAM_ID_AF)
       ? VIETNAM_TEAM_ID
       : String(raw.teams?.away?.id),
     strAwayTeam: raw.teams?.away?.name || "Unknown",
-    strAwayTeamBadge: raw.teams?.away?.logo || null,
+    strAwayTeamBadge: isAwayVietnam === VIETNAM_TEAM_ID
+      ? VN_BADGE
+      : (raw.teams?.away?.logo || null),
     intAwayScore: raw.goals?.away != null ? String(raw.goals.away) : null,
 
     dateEvent: date,
