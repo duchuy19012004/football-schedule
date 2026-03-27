@@ -25,7 +25,6 @@ export default function Loading() {
   return (
     <main className="min-h-screen">
       <div className="max-w-3xl mx-auto px-4 py-6 md:py-10">
-
         {/* === HERO SKELETON === */}
         {/* Mô phỏng HeroSection khi chưa có data */}
         <div className="relative overflow-hidden rounded-2xl mb-8 bg-gray-800/50 animate-pulse">
